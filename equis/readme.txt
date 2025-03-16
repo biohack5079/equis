@@ -1,0 +1,1 @@
+Download nandgame_eng.cpp from https://github.com/biohack5079/nandgame/blob/main/nandgame_eng.cpp, install MinGW, and run the following command in Command Prompt: g++ -o equis_01 equis_01.cpp -lwinmm -lgdiplus -mwindows ; .\equis_01
