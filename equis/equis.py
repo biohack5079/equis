@@ -73,6 +73,9 @@ class HorseRacingGame:
 
         self.result_label = tk.Label(self.root, text="", font=("Ricty Diminished", 20))
         self.result_label.place(x=40, y=520)
+        
+        self.total_contribution_label = tk.Label(self.root, text="", font=("Ricty Diminished", 20))
+        self.total_contribution_label.place(x=800, y=520)
 
     def create_horse_images(self):
         self.image_canvases = []
@@ -170,6 +173,7 @@ class HorseRacingGame:
         # 音楽が終了したら賞金を計算
         self.calculate_prize()
 
+
     def calculate_prize(self):
         # 貢ぎ金が多い順にソート
         sorted_horses = sorted(zip(self.horses, self.horse_contributions), key=lambda x: x[1], reverse=True)
@@ -179,15 +183,8 @@ class HorseRacingGame:
 
         # 3億円の上限を適用
         prize_money = min(total_money, 300000000)
-
-        # レース結果の表示
-        result_text = "🏆レース結果🏆\n"
-        for i, (horse, money) in enumerate(sorted_horses[:3]):
-            result_text += f"{i+1}着: {horse} (貢ぎ額: {self.format_money(money)})\n"
-
-        result_text += f"\n✨獲得賞金: {self.format_money(prize_money)}✨"
-
-        self.result_label.config(text=result_text, fg="red", justify="left", anchor="w")
+        
+        return total_money
 
     def update_race_results(self):
         race_result = sorted(self.horses,
@@ -199,6 +196,8 @@ class HorseRacingGame:
             prize_money_list[self.horses.index(race_result[i])] = self.prize_distribution[i]
 
         self.previous_results = prize_money_list
+        
+        total_contribution = self.calculate_prize()
 
         result_text = "予想：\n" + "  ".join(
             f"{i+1}着: {horse} (貢ぎ金額: {self.format_money(self.horse_contributions[self.horses.index(horse)])})"
@@ -207,6 +206,7 @@ class HorseRacingGame:
         )
 
         self.result_label.config(text=result_text, fg="blue", justify="left", anchor="w")
+        self.total_contribution_label.config(text=f"合計貢ぎ金額：{self.format_money(total_contribution)}", fg="blue", justify="left", anchor="w")
 
     def contribute(self, horse_name):
         horse_index = self.horses.index(horse_name)
