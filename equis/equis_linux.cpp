@@ -1,7 +1,7 @@
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_mixer.h>
-#include <SDL_ttf.h> // Include SDL_ttf
+#include <SDL_ttf.h>
 #include <string>
 #include <vector>
 #include <random>
@@ -13,6 +13,7 @@
 #include <iomanip>
 #include <sstream>
 #include <filesystem>
+#include <atomic>
 
 // Game constants
 const int WINDOW_WIDTH = 1250;
@@ -27,6 +28,7 @@ struct GameState {
     std::vector<long long> previousResults;
     bool isRacing;
     bool skipConfirmation;
+    std::atomic<bool> raceFinished;
 
     GameState() :
         horseNames{"クラウドナイト", "ダンディオン", "ルシフェルウィング",
@@ -34,7 +36,8 @@ struct GameState {
         contributions(6, 0),
         previousResults(6, 0),
         isRacing(false),
-        skipConfirmation(false) {}
+        skipConfirmation(false),
+        raceFinished(false) {}
 };
 
 // UI Resources
@@ -42,10 +45,24 @@ struct UIResources {
     SDL_Texture* bgImage;
     std::vector<SDL_Texture*> horseImages;
     SDL_Texture* girlImage;
+    std::vector<SDL_Texture*> horseNameTextures;
     int bgX1, bgX2, bgX3;
-    TTF_Font* font; // Add font
+    TTF_Font* font;
 
     UIResources() : bgImage(nullptr), girlImage(nullptr), bgX1(0), bgX2(WINDOW_WIDTH), bgX3(WINDOW_WIDTH * 2), font(nullptr) {}
+    ~UIResources(){
+        if (bgImage) SDL_DestroyTexture(bgImage);
+        for (auto& horseImage : horseImages) {
+            if (horseImage) SDL_DestroyTexture(horseImage);
+        }
+        if (girlImage) SDL_DestroyTexture(girlImage);
+        for (auto& horseNameTexture : horseNameTextures) {
+            if (horseNameTexture) SDL_DestroyTexture(horseNameTexture);
+        }
+        if (font) {
+            TTF_CloseFont(font);
+        }
+    }
 };
 
 class HorseRacingGame {
@@ -56,8 +73,10 @@ private:
     UIResources resources;
     std::thread raceThread;
     std::thread backgroundThread;
+    std::thread bgmCheckThread;
     Mix_Music* bgm;
     bool resourcesLoaded;
+    bool isRunning;
 
     // Helper function to render text
     SDL_Texture* RenderText(const std::string& text, SDL_Color color) {
@@ -80,7 +99,8 @@ public:
         window(window),
         renderer(renderer),
         bgm(nullptr),
-        resourcesLoaded(false) {
+        resourcesLoaded(false),
+        isRunning(true) {
 
         // Check for required files before loading
         CheckRequiredFiles();
@@ -95,23 +115,17 @@ public:
     }
 
     ~HorseRacingGame() {
-        // Free resources
-        if (resources.bgImage) SDL_DestroyTexture(resources.bgImage);
-        for (auto& horseImage : resources.horseImages) {
-            if (horseImage) SDL_DestroyTexture(horseImage);
-        }
-        if (resources.girlImage) SDL_DestroyTexture(resources.girlImage);
-        if (bgm != nullptr) {
-            Mix_FreeMusic(bgm);
-        }
-        if (resources.font) {
-            TTF_CloseFont(resources.font);
-        }
+        StopRace();
+        isRunning = false;
+        if (bgmCheckThread.joinable()) bgmCheckThread.join();
+        resources.~UIResources();
+        if(renderer) SDL_DestroyRenderer(renderer);
+        if(window) SDL_DestroyWindow(window);
     }
 
     void CheckRequiredFiles() {
         std::vector<std::string> requiredFiles = {
-            "0.png", "1.png", "2.png", "3.png", "4.png", "5.png", "6.png", "7.png", "race_bgm.mp3"
+            "0.png", "1.png", "2.png", "3.png", "4.png", "5.png", "6.png", "7.png", "race_bgm.mp3", "KaiseiTokumin-Bold.ttf"
         };
 
         std::cout << "Checking for required files:" << std::endl;
@@ -175,10 +189,23 @@ public:
         }
         
         // Load font
-        resources.font = TTF_OpenFont("KaiseiTokumin-Bold.ttf", 24); // Replace with your font file
+        resources.font = TTF_OpenFont("KaiseiTokumin-Bold.ttf", 24);
         if (!resources.font) {
             std::cerr << "Failed to load font: KaiseiTokumin-Bold.ttf, Error: " << TTF_GetError() << std::endl;
             success = false;
+        }
+        
+        // Load horse name textures
+        SDL_Color textColor = {255, 255, 255, 255};
+        for (const auto& name : gameState.horseNames) {
+            SDL_Texture* nameTexture = RenderText(name, textColor);
+            if (!nameTexture) {
+                std::cerr << "Failed to create texture for horse name: " << name << std::endl;
+                success = false;
+                resources.horseNameTextures.push_back(nullptr);
+            } else {
+                resources.horseNameTextures.push_back(nameTexture);
+            }
         }
 
         return success;
@@ -197,6 +224,7 @@ public:
 
         std::cout << "レースが始まります！最後まで推しを信じて貢ぎましょう！" << std::endl;
         gameState.isRacing = true;
+        gameState.raceFinished = false;
 
         // Try to load and play BGM
         bgm = Mix_LoadMUS("race_bgm.mp3");
@@ -208,6 +236,18 @@ public:
                 std::cerr << "Failed to play music, Error: " << Mix_GetError() << std::endl;
             }
         }
+        
+        // Start BGM check thread
+        bgmCheckThread = std::thread([this]() {
+            while (isRunning) {
+                if (gameState.isRacing && Mix_PlayingMusic() == 0) {
+                    gameState.raceFinished = true;
+                    StopRace();
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        });
 
         // Start background scroll thread
         try {
@@ -234,6 +274,7 @@ public:
     }
 
     void StopRace() {
+        if (!gameState.isRacing) return;
         gameState.isRacing = false;
 
         try {
@@ -254,6 +295,20 @@ public:
 
     void Contribute(int horseIndex) {
         if (horseIndex >= 0 && horseIndex < (int)gameState.horseNames.size()) {
+            if (!gameState.skipConfirmation) {
+                std::cout << "本当に" << gameState.horseNames[horseIndex] << "に" << FormatMoney(CONTRIBUTION_AMOUNT) << "を貢ぎますか？(y/n)" << std::endl;
+                char confirm;
+                std::cin >> confirm;
+                if (confirm != 'y') {
+                    std::cout << "貢ぎをキャンセルしました。" << std::endl;
+                    return;
+                }
+                std::cout << "次回から確認を省略しますか？(y/n)" << std::endl;
+                std::cin >> confirm;
+                if (confirm == 'y') {
+                    gameState.skipConfirmation = true;
+                }
+            }
             gameState.contributions[horseIndex] += CONTRIBUTION_AMOUNT;
         }
     }
@@ -293,7 +348,7 @@ public:
         DrawDebugInfo();
         
         // Draw race result
-        if (!gameState.isRacing) {
+        if (!gameState.isRacing && gameState.raceFinished) {
             DrawRaceResult();
         }
 
@@ -471,6 +526,15 @@ private:
                 SDL_SetRenderDrawColor(renderer, 200, 100, 100, 255);
                 SDL_RenderFillRect(renderer, &horseRect);
             }
+            
+            // Draw horse name below the image
+            if (resources.horseNameTextures[i]) {
+                SDL_Rect nameRect;
+                SDL_QueryTexture(resources.horseNameTextures[i], NULL, NULL, &nameRect.w, &nameRect.h);
+                nameRect.x = x + (200 - nameRect.w) / 2;
+                nameRect.y = y + 200;
+                SDL_RenderCopy(renderer, resources.horseNameTextures[i], NULL, &nameRect);
+            }
         }
     }
 
@@ -583,7 +647,6 @@ int main(int argc, char* argv[]) {
             needRedraw = true;
             if (e.type == SDL_QUIT) {
                 quit = true;
-                game.StopRace(); // ゲーム終了時にスレッドを停止
             } else if (e.type == SDL_KEYDOWN) {
                 if (e.key.keysym.sym == SDLK_SPACE) {
                     game.StartRace();
@@ -591,7 +654,6 @@ int main(int argc, char* argv[]) {
                     game.ShowContributionDialog();
                 } else if (e.key.keysym.sym == SDLK_ESCAPE) {
                     quit = true;
-                    game.StopRace(); // ゲーム終了時にスレッドを停止
                 }
             }
         }
