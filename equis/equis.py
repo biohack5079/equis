@@ -112,7 +112,11 @@ class HorseRacingGame:
         if amount >= 100000000:
             oku = amount // 100000000
             man = (amount % 100000000) // 10000
-            return f"{oku}億{man}万円"
+            if man == 0:
+                return f"{oku}億円"
+            else:
+                return f"{oku}億{man}万円"
+
         elif amount >= 10000:
             return f"{amount // 10000}万円"
         return f"{amount}円"
