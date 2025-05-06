@@ -8,7 +8,7 @@ import time
 
 class HorseRacingGame:
     def __init__(self):
-        self.horses = ["クラウドナイト", "ダンディオン", "ルシフェルウィング",
+        self.horses = ["クラウドナイト", "ダンディオン", "ブレイブハート", 
                       "アレスフレア", "レオンハート", "ゼウスブレイド"]
         self.horse_images = [f"{i}.png" for i in range(1, 7)]
         self.girl_images = ["7.png"]
@@ -16,7 +16,8 @@ class HorseRacingGame:
         self.horse_contributions = [0] * len(self.horses)
         self.previous_results = [0] * len(self.horses)
         self.skip_confirmation = False
-
+        self.total_top3_label = None
+        
         self.setup_window()
         self.setup_audio()
         self.create_ui_elements()
@@ -27,10 +28,10 @@ class HorseRacingGame:
         self.root.title("最大３億円が当たる！イケメン競馬ゲーム「osiuma」")
         self.root.resizable(False, False)
         self.root.geometry("1250x690")
-
+        
         self.canvas = tk.Canvas(self.root)
         self.canvas.pack(fill=tk.BOTH, expand=True)
-
+        
         self.setup_background()
 
     def setup_background(self):
@@ -38,11 +39,11 @@ class HorseRacingGame:
         new_height = self.root.winfo_screenheight()
         new_width = int(new_height * (462 / 334))
         self.bg_photo = ImageTk.PhotoImage(bg_image.resize((new_width, new_height), Image.LANCZOS))
-
+        
         self.bg_x1, self.bg_x2, self.bg_x3 = 0, new_width, new_width * 2
-        for x, tag in [(self.bg_x1, "background1"), (self.bg_x2, "background2"),
+        for x, tag in [(self.bg_x1, "background1"), (self.bg_x2, "background2"), 
                       (self.bg_x3, "background3")]:
-            self.canvas.create_image(x, self.root.winfo_screenheight() // 2,
+            self.canvas.create_image(x, self.root.winfo_screenheight() // 2, 
                                    image=self.bg_photo, tags=tag, anchor="w")
 
     def setup_audio(self):
@@ -61,21 +62,21 @@ class HorseRacingGame:
         self.create_buttons()
 
     def create_labels(self):
-        tk.Label(self.root, text="最大３億円が当たる！イケメン競馬ゲーム",
+        tk.Label(self.root, text="最大３億円が当たる！イケメン競馬ゲーム", 
                 font=("Ricty Diminished", 22)).place(x=50, y=30)
-
+        
         self.horse_labels = []
         for i, horse in enumerate(self.horses):
-            label = tk.Label(self.root, text=f"{horse}: {self.format_money(0)}",
+            label = tk.Label(self.root, text=f"{horse}: {self.format_money(0)}", 
                            font=("Ricty Diminished", 20))
             label.place(x=50, y=120 + 50 * i)
             self.horse_labels.append(label)
-
+            
         self.result_label = tk.Label(self.root, text="", font=("Ricty Diminished", 20))
         self.result_label.place(x=40, y=520)
-        
-        self.total_contribution_label = tk.Label(self.root, text="", font=("Ricty Diminished", 20))
-        self.total_contribution_label.place(x=800, y=520)
+
+        self.total_top3_label = tk.Label(self.root, text="", font=("Ricty Diminished", 20))
+        self.total_top3_label.place(x=600, y=550) 
 
     def create_horse_images(self):
         self.image_canvases = []
@@ -86,10 +87,10 @@ class HorseRacingGame:
             canvas.create_image(100, 100, image=photo)
             canvas.image = photo
             canvas.place(x=550 + (i % 3) * 220, y=90 + (i // 3) * 210)
-            canvas.bind("<Button-1>",
+            canvas.bind("<Button-1>", 
                        lambda e, horse=self.horses[i]: self.show_contribution_dialog(horse))
-
-            horse_label = tk.Label(canvas, text=self.horses[i],
+            
+            horse_label = tk.Label(canvas, text=self.horses[i], 
                                  font=("Ricty Diminished", 14))
             horse_label.place(x=100, y=180, anchor="center")
             self.image_canvases.append(canvas)
@@ -101,11 +102,11 @@ class HorseRacingGame:
         canvas.create_image(75, 75, image=photo)
         canvas.image = photo
         canvas.place(x=1020, y=510)
-        canvas.bind("<Button-1>",
+        canvas.bind("<Button-1>", 
                    lambda e: messagebox.showinfo("推し方", "推し方で勝負が決まるよ！"))
 
     def create_buttons(self):
-        tk.Button(self.root, text="START", command=self.start_game,
+        tk.Button(self.root, text="START", command=self.start_game, 
                  font=("Ricty Diminished", 20)).place(x=380, y=430)
 
     def format_money(self, amount):
@@ -116,10 +117,10 @@ class HorseRacingGame:
                 return f"{oku}億円"
             else:
                 return f"{oku}億{man}万円"
-
         elif amount >= 10000:
             return f"{amount // 10000}万円"
         return f"{amount}円"
+
 
     def scroll_background(self):
         while pygame.mixer.music.get_busy():
@@ -145,6 +146,9 @@ class HorseRacingGame:
             self.root.update()
             time.sleep(0.01)  # スムーズなスクロールのための遅延
 
+
+    
+
     def start_game(self):
         if not pygame.mixer.get_init():
             self.setup_audio()
@@ -152,14 +156,22 @@ class HorseRacingGame:
         # すでにレースが進行中ならアラートを表示
         if pygame.mixer.music.get_busy():
             messagebox.showwarning("警告", "レース中です！途中で止めると無効になります。")
-            return
+
+            # --- ↓↓↓ レース中に押されたら音楽停止＆結果表示 (デバッグ用) ↓↓↓ ---
+            # pygame.mixer.music.stop() # 音楽を停止
+            # self.calculate_prize()    # 結果を計算・表示
+            # messagebox.showinfo("レース中断", "レースを中断し、現在の結果を表示しました。")
+            return #変更しない
+            # --- ↑↑↑ ここまで修正 ---
+
+
 
         messagebox.showinfo("レース開始", "レースが始まります！最後まで推しを信じて貢ぎましょう！")
 
         # BGMを再生
         pygame.mixer.music.load("race_bgm.mp3")
-        pygame.mixer.music.play(0)
-
+        pygame.mixer.music.play(0) 
+        
         # 背景スクロールとユーザーシミュレーションを並行して実行
         threading.Thread(target=self.scroll_background, daemon=True).start()
         threading.Thread(target=self.simulate_users, daemon=True).start()
@@ -170,6 +182,7 @@ class HorseRacingGame:
         # 音楽終了後に結果を表示するスレッドを開始
         threading.Thread(target=self.wait_for_music_end, daemon=True).start()
 
+    
     def wait_for_music_end(self):
         while pygame.mixer.music.get_busy():
             time.sleep(0.1)  # 1秒ごとにチェック
@@ -187,21 +200,30 @@ class HorseRacingGame:
 
         # 3億円の上限を適用
         prize_money = min(total_money, 300000000)
-        
-        return total_money
+
+        # レース結果の表示
+        result_text = "🏆レース結果🏆\n"
+        for i, (horse, money) in enumerate(sorted_horses[:3]):
+            result_text += f"{i+1}着: {horse} (貢ぎ額: {self.format_money(money)})\n"
+
+        result_text += f"\n✨獲得賞金: {self.format_money(prize_money)}✨"
+
+        self.result_label.config(text=result_text, fg="red", justify="left", anchor="w")
+
+        total_top3_text = f"🏆上位3着 合計賞金🏆\n{self.format_money(total_money)}"
+        if self.total_top3_label:
+            self.total_top3_label.config(text=total_top3_text, fg="purple", justify="left", anchor="w")
 
     def update_race_results(self):
-        race_result = sorted(self.horses,
-                           key=lambda x: self.horse_contributions[self.horses.index(x)],
+        race_result = sorted(self.horses, 
+                           key=lambda x: self.horse_contributions[self.horses.index(x)], 
                            reverse=True)
-
+        
         prize_money_list = [0] * len(self.horses)
         for i in range(6):
             prize_money_list[self.horses.index(race_result[i])] = self.prize_distribution[i]
-
-        self.previous_results = prize_money_list
         
-        total_contribution = self.calculate_prize()
+        self.previous_results = prize_money_list
 
         result_text = "予想：\n" + "  ".join(
             f"{i+1}着: {horse} (貢ぎ金額: {self.format_money(self.horse_contributions[self.horses.index(horse)])})"
@@ -210,7 +232,6 @@ class HorseRacingGame:
         )
 
         self.result_label.config(text=result_text, fg="blue", justify="left", anchor="w")
-        self.total_contribution_label.config(text=f"合計貢ぎ金額：{self.format_money(total_contribution)}", fg="blue", justify="left", anchor="w")
 
     def contribute(self, horse_name):
         horse_index = self.horses.index(horse_name)
@@ -226,11 +247,11 @@ class HorseRacingGame:
         dialog = tk.Toplevel(self.root)
         dialog.title("推し")
 
-        tk.Label(dialog, text=f"{horse_name}を推しますか？(1000万円)",
+        tk.Label(dialog, text=f"{horse_name}を推しますか？(1000万円)", 
                 font=("Ricty Diminished", 14)).pack(pady=10)
 
         check_var = tk.BooleanVar()
-        tk.Checkbutton(dialog, text="次回以降この確認を省略する",
+        tk.Checkbutton(dialog, text="次回以降この確認を省略する", 
                       variable=check_var).pack()
 
         def on_confirm():
@@ -241,7 +262,7 @@ class HorseRacingGame:
         button_frame = tk.Frame(dialog)
         button_frame.pack(pady=10)
         tk.Button(button_frame, text="推す", command=on_confirm).pack(side="left", padx=5)
-        tk.Button(button_frame, text="キャンセル",
+        tk.Button(button_frame, text="キャンセル", 
                  command=dialog.destroy).pack(side="right", padx=5)
 
         dialog.transient(self.root)
@@ -249,8 +270,8 @@ class HorseRacingGame:
         self.root.wait_window(dialog)
 
     def update_horse_labels(self):
-        sorted_horses = sorted(zip(self.horses, self.horse_contributions,
-                                 self.horse_images, self.image_canvases),
+        sorted_horses = sorted(zip(self.horses, self.horse_contributions, 
+                                 self.horse_images, self.image_canvases), 
                              key=lambda x: x[1], reverse=True)
         for i, (horse_name, contribution, _, img_canvas) in enumerate(sorted_horses):
             self.horse_labels[i].config(text=f"{horse_name}: {self.format_money(contribution)}")
@@ -266,10 +287,10 @@ class HorseRacingGame:
             n = max(1, n - 1)
 
     def initial_race(self):
-        race_result = sorted(self.horses,
-                           key=lambda x: self.horse_contributions[self.horses.index(x)],
+        race_result = sorted(self.horses, 
+                           key=lambda x: self.horse_contributions[self.horses.index(x)], 
                            reverse=True)
-        self.previous_results = [self.horse_contributions[self.horses.index(horse)]
+        self.previous_results = [self.horse_contributions[self.horses.index(horse)] 
                                for horse in race_result]
 
     def run(self):
